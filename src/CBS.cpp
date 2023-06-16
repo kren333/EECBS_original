@@ -9,6 +9,7 @@
 // takes the paths_found_initially and UPDATE all (constrained) paths found for agents from curr to start
 inline void CBS::updatePaths(CBSNode* curr)
 {
+	print("i love trains");
 	for (int i = 0; i < num_of_agents; i++)
 		paths[i] = &paths_found_initially[i];
 	vector<bool> updated(num_of_agents, false);  // initialized for false
