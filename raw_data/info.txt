@@ -1,4 +1,5 @@
 this will contain 2 directories:
-    bd contains each backward djikstra output for each EECBS run. This will be uniquely identified by the EECBS instance file.
-    paths contains each paths.txt for each EECBS run. This will be uniquely identified by the EECBS instance file (/bd) as well as the 
-          map which was run, and so the format of each path file will be mapname-bdname.txt.
+    bd: contains each backward djikstra output for each EECBS run. This will be uniquely identified by the EECBS instance file and number 
+        of agents.
+    paths: contains each paths.txt for each EECBS run. This will be uniquely identified by the EECBS instance file (/bd) as well as the 
+           map which was run and number of agents, and so the format of each path file will be mapnameandbdname.txt.
