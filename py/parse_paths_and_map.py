@@ -58,23 +58,22 @@ def parse_map(mapfile):
     mapdata[mapdata == '@'] = 1
     mapdata[mapdata == 'T'] = 1
     mapdata = mapdata.astype(int)
-    print(type(mapdata))
     return mapdata
 
 # reads a txt file of paths for each agent, returning a dictionary mapping timestep->position of each agent
-def parse_path(file):
+def parse_path(pathfile):
     # maps timesteps to a list of agent coordinates
     timestepsToMaps = defaultdict(list)
     # get max number of timesteps by counting number of commas
     maxTimesteps = 0
-    with open(file, 'r') as fd:
+    with open(pathfile, 'r') as fd:
         for line in fd.readlines():
             timesteps = 0
             for c in line:
                 if c == ',': timesteps += 1
             maxTimesteps = max(maxTimesteps, timesteps)
     # get path for each agent and update dictionary of maps accordingly
-    with open(file, 'r') as fd:
+    with open(pathfile, 'r') as fd:
         for line in fd.readlines():
             i = 0
             # omit up to the first left paren
@@ -106,10 +105,46 @@ def parse_bd(bdfile):
     # TODO implement
     pass
 
+# TODO goes through a directory of maps, parsing each one and saving to a dictionary
+def batch_map(dir):
+    res = {} # string->np
+    # iterate over files in directory, parsing each map
+    for filename in os.listdir(dir):
+        f = os.path.join(dir, filename)
+        # checking if it is a file
+        if os.path.isfile(f):
+            # TODO parse the map file and add to a global dictionary (or some class variable dictionary)
+            val = parse_map(f)
+            res[filename] = val # TODO make sure that filename doesn't have weird chars you don't want in the npz
+            print(f)
+        else:
+            print("bad map dir")
+            return False
+    return res
+
+# TODO goes through a directory of bd outputs, parsing each one and saving to a dictionary
+def batch_bd(dir):
+    res = {} # string->np
+    # iterate over files in directory, parsing each map
+    for filename in os.listdir(dir):
+        f = os.path.join(dir, filename)
+        # checking if it is a file
+        if os.path.isfile(f):
+            # TODO parse the bd file and add to a global dictionary (or some class variable dictionary)
+            val = parse_bd(f)
+            res[filename] = val # TODO make sure that filename doesn't have weird chars you don't want in the npz
+            print(f)
+        else:
+            print("bad bd dir")
+            return False
+    return res
+
 # TODO goes through a directory of outputted EECBS paths, 
 # returning a dictionary of tuples of the map name, bd name, and paths dictionary
-# NOTE: we assume that the file of each path is formatted as 'raw_data/paths/mapname-bdname.txt'
+# NOTE we assume that the file of each path is formatted as 'raw_data/paths/mapnameandbdname.txt'
+# NOTE and also that bdname has agent number grandfathered into it
 def batch_path(dir):
+    res = [] # list of (mapname, bdname, int->np.darray dictionary)
     # iterate over files in directory, making a tuple for each
     for filename in os.listdir(dir):
         f = os.path.join(dir, filename)
@@ -117,37 +152,15 @@ def batch_path(dir):
         if os.path.isfile(f):
             # TODO parse the path file, regex its map name and bd that it was formed from based on file name, 
             # and add the resulting triplet to a global dictionary (or some class variable dictionary)
+            raw = filename.split("and") # isolate map name, bd name
+            mapname, bdname = raw[0], raw[1]
+            val = parse_map(f) # get the path dict
+            res.append(mapname, bdname, val)
             print(f)
         else:
             print("bad path dir")
-            return
-
-
-# TODO goes through a directory of maps, parsing each one and saving to a dictionary
-def batch_map(dir):
-    # iterate over files in directory, parsing each map
-    for filename in os.listdir(dir):
-        f = os.path.join(dir, filename)
-        # checking if it is a file
-        if os.path.isfile(f):
-            # TODO parse the map file and add to a global dictionary (or some class variable dictionary)
-            print(f)
-        else:
-            print("bad map dir")
-            return
-
-# TODO goes through a directory of bd outputs, parsing each one and saving to a dictionary
-def batch_bd(dir):
-    # iterate over files in directory, parsing each map
-    for filename in os.listdir(dir):
-        f = os.path.join(dir, filename)
-        # checking if it is a file
-        if os.path.isfile(f):
-            # TODO parse the bd file and add to a global dictionary (or some class variable dictionary)
-            print(f)
-        else:
-            print("bad bd dir")
-            return
+            return False
+    return res
 
 def main():
     # cmdline argument parsing: take in dirs for paths, maps, and bds, and where you want the outputted npz
@@ -172,11 +185,26 @@ def main():
     # TODO parse each map, add to global dict
     maps = batch_map(mapIn)
 
+    # error handling
+    if not maps:
+        print("error parsing maps")
+        return
+
     # TODO parse each bd, add to global dict
     bds = batch_bd(bdIn)
 
+    # error handling
+    if not bds:
+        print("error parsing bds")
+        return
+
     # TODO parse each path, add to global list of data
     data = batch_path(pathsIn)
+
+    # error handling
+    if not data:
+        print("error parsing data")
+        return
 
     # send each map, each bd, and each tuple representing a path + instance to npz
 
