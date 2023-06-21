@@ -10,7 +10,20 @@
 #include <boost/program_options.hpp>
 #include <boost/tokenizer.hpp>
 #include "ECBS.h"
+#include <fstream>
 
+// TODO delete
+void print(vector <vector<int>> & a) {
+   std::cout << "The vector elements are : \n";
+   
+  for(int i=0; i < a.size(); i++){
+      for(int j = 0; j < a.at(i).size(); j++){
+          cout << (a.at(i)).at(j) << " ";
+      }
+	  cout << "\n";
+      cout << "________________________________________________________________________________________________________________\n";
+  }
+}
 
 /* Main function */
 int main(int argc, char** argv)
@@ -154,6 +167,25 @@ int main(int argc, char** argv)
         ecbs.setNodeSelectionRule(n);
         ecbs.setSavingStats(vm["stats"].as<bool>());
         ecbs.setHighLevelSolver(s, vm["suboptimality"].as<double>());
+
+		// write bd info to file
+		print(ecbs.bds);
+		cout << ecbs.bds.size() << "\n";
+
+		ofstream file;
+		string vector_file = "./raw_data/bd/" + vm["agents"].as<string>() + std::to_string(vm["agentNum"].as<int>()) + ".txt";
+		file.open(vector_file);
+	
+		for(int i=0;i<ecbs.bds.size();i++)
+		{
+			for(int j = 0; j < ecbs.bds.at(i).size(); j++) {
+				file << ecbs.bds.at(i).at(j) << ",";
+			}
+			file << endl;
+		}
+	
+		file.close();
+
         //////////////////////////////////////////////////////////////////////
         // run
         double runtime = 0;
@@ -220,7 +252,6 @@ int main(int argc, char** argv)
             cbs.saveStats(vm["output"].as<string>(), vm["agents"].as<string>());
         cbs.clearSearchEngines();
     }
-
 	return 0;
 
 }

@@ -93,6 +93,9 @@ public:
 	void clear(); // used for rapid random  restart
 
 	int getInitialPathLength(int agent) const {return (int) paths_found_initially[agent].size() - 1; }
+
+	vector<vector<int>> bds; // NEW: this saves all backward djikstra information for our ML pipeline
+
 protected:
     bool rectangle_reasoning;  // using rectangle reasoning
 	bool corridor_reasoning;  // using corridor reasoning

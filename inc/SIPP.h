@@ -77,8 +77,9 @@ public:
 
     string getName() const { return "SIPP"; }
 
-    SIPP(const Instance& instance, int agent):
-            SingleAgentSolver(instance, agent) {}
+    // NEW added bds
+    SIPP(const Instance& instance, int agent, vector <vector <int>> & bds):
+            SingleAgentSolver(instance, agent, bds) {}
 
 private:
     // define typedefs and handles for heap

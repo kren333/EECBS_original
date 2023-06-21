@@ -106,12 +106,13 @@ public:
 	// int getStartLocation() const {return instance.start_locations[agent]; }
 	// int getGoalLocation() const {return instance.goal_locations[agent]; }
 
-	SingleAgentSolver(const Instance& instance, int agent) :
+	SingleAgentSolver(const Instance& instance, int agent, vector <vector<int>> & bds) :
 		instance(instance), //agent(agent), 
 		start_location(instance.start_locations[agent]),
 		goal_location(instance.goal_locations[agent])
 	{
-		compute_heuristics();
+		// NEW added bds
+		compute_heuristics(bds);
 	}
 
     virtual ~SingleAgentSolver() =default;
@@ -121,7 +122,8 @@ protected:
 	// int lower_bound; // Threshold for FOCAL
 	double w = 1; // suboptimal bound
 
-	void compute_heuristics();
+	// NEW added bds
+	void compute_heuristics(vector<vector<int>> & bds);
 	int get_DH_heuristic(int from, int to) const { return abs(my_heuristic[from] - my_heuristic[to]); }
 };
 

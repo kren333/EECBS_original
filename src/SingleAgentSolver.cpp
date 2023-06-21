@@ -8,8 +8,8 @@ list<int> SingleAgentSolver::getNextLocations(int curr) const // including itsel
 	return rst;
 }
 
-
-void SingleAgentSolver::compute_heuristics()
+// NEW added bds
+void SingleAgentSolver::compute_heuristics(vector<vector<int>> & bds)
 {
 	struct Node
 	{
@@ -52,5 +52,6 @@ void SingleAgentSolver::compute_heuristics()
 		}
 	}
 
-	// TODO: write the resulting bd for this one goal to a file, if it has not been calculated before
+	// NEW adds the heuristics
+	bds.push_back(my_heuristic);
 }
