@@ -51,4 +51,6 @@ void SingleAgentSolver::compute_heuristics()
 			}
 		}
 	}
+
+	// TODO: write the resulting bd for this one goal to a file, if it has not been calculated before
 }
