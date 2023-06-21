@@ -86,3 +86,12 @@ In Proceedings of the Symposium on Combinatorial Search (SoCS), pages 148-152, 2
 MAPF-LNS2: Fast Repairing for Multi-Agent Path Finding via Large Neighborhood Search.
 In Proceedings of the AAAI Conference on Artificial Intelligence, pages 10256-10265, 2022.
 
+USED CMD LINES
+
+outdated but single path and map:
+python3 py/parse_paths_and_map.py paths.txt data/mapf-map/Berlin_1_256.map testingstuff/paths.csv test
+ingstuff/map.csv
+
+batch testing:
+python3 py/parse_paths_and_map.py inc a b c
+
