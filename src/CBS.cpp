@@ -1121,10 +1121,13 @@ void CBS::saveCT(const string &fileName) const // write the CT to a file
 
 }
 
-void CBS::savePaths(const string &fileName) const
+void CBS::savePaths(const string &fileName, int rows, int cols) const
 {
     std::ofstream output;
     output.open(fileName, std::ios::out);
+	// NEW write dimensions first
+	output << rows << "," << cols << endl;
+
     for (int i = 0; i < num_of_agents; i++)
     {
         output << "Agent " << i << ": ";

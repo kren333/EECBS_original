@@ -22,16 +22,12 @@ mapsToNumAgents = {
 
 class BatchRunner:
     # TODO ADD THE DEFAULTS FOR OPTIMIZATION (make the defaults the offs)
-    def __init__(self, mapfile, scenfile, timeLimit, suboptimality, r, w_h, batchFolderName, reuse_toggle=0, all_optimizations = True):
+    def __init__(self, mapfile, scenfile, timeLimit, suboptimality, batchFolderName):
         self.mapfile = mapfile
         self.scenfile = scenfile
         self.timeLimit = timeLimit
         self.suboptimality = suboptimality
         self.batchFolderName = batchFolderName
-        self.r = r
-        self.w_h = w_h
-        self.reuse_toggle = reuse_toggle
-        self.all_optimizations = all_optimizations
 
     def runSingleSettingsOnMap(self, numAgents):
         mods_str = "with_mods" if self.all_optimizations else "no_mods"
@@ -42,9 +38,6 @@ class BatchRunner:
             command += " --suboptimality={}".format(self.suboptimality)
             command += " --batchFolder={} -o allresults{}{}{}.csv".format(self.batchFolderName, self.r, self.w_h, mods_str)
             command += " --reuse_toggle={}".format(self.reuse_toggle)
-            if not self.all_optimizations:
-                command += " --heuristics=Zero --prioritizingConflicts=false --bypass=false --rectangleReasoning=false --corridorReasoning=false"
-                command += " --targetReasoning=false"
 
             subprocess.run(command.split(" "), check=False) # True if want failure error
     
@@ -76,6 +69,7 @@ class BatchRunner:
 ExpSettings = dict()
 
 def main():
+    # TODO: 1) run with random-32-32, 20, 30, 40 agents, 2) check parse, 3) add multiple maps (den312d) with same agent #s, 4) check parse file names again, 5) try pytorch
     parser = argparse.ArgumentParser()
     parser.add_argument("map", help="map to run", type=str) # Note: Positional is required, make not position by changing to --yKey
 

@@ -9,6 +9,7 @@ import pdb
 import pandas as pd
 from os.path import exists
 from collections import defaultdict
+import pdb
 
 '''
 0. parse bd (fix eecbs by having it make another txt output, parse it here)
@@ -60,21 +61,42 @@ def parse_map(mapfile):
     mapdata = mapdata.astype(int)
     return mapdata
 
-# reads a txt file of paths for each agent, returning a dictionary mapping timestep->position of each agent
 def parse_path(pathfile):
+    '''
+    reads a txt file of paths for each agent, returning a dictionary mapping timestep->position of each agent
+    inputs: pathfile (string)
+    outputs: (T,N,2) np.darray: where is each agent at time T?
+    '''
+    # save dimensions for later array saving
+    w = h = 0
     # maps timesteps to a list of agent coordinates
     timestepsToMaps = defaultdict(list)
     # get max number of timesteps by counting number of commas
     maxTimesteps = 0
     with open(pathfile, 'r') as fd:
+        linenum = 0
         for line in fd.readlines():
+            if linenum == 0: 
+                linenum += 1
+                continue # ignore dimension line
             timesteps = 0
             for c in line:
                 if c == ',': timesteps += 1
             maxTimesteps = max(maxTimesteps, timesteps)
+            linenum += 1
+    print(linenum, maxTimesteps)
     # get path for each agent and update dictionary of maps accordingly
     with open(pathfile, 'r') as fd:
+        linenum = 0
         for line in fd.readlines():
+            if linenum == 0: # parse dimensions of map and keep going
+                line = line[:-1]
+                line = line.split(",")
+                print(line)
+                w = int(line[0])
+                h = int(line[1])
+                linenum += 1
+                continue
             i = 0
             # omit up to the first left paren
             while line[i] != '(': i += 1
@@ -93,16 +115,31 @@ def parse_path(pathfile):
                         timestepsToMaps[i].append([x, y])
                         i += 1
                 else: timestepsToMaps[i].append([x, y])
+            linenum += 1
     
     # make each map a np array
     for key in timestepsToMaps:
         timestepsToMaps[key] = np.asarray(timestepsToMaps[key])
+    
+    # make this t x n x 2
+    res = []
+    for i in range(len(timestepsToMaps)):
+        res.append(timestepsToMaps[i])
+    
+    res = np.asarray(res)
+    t, n, _ = res.shape
+    print(t, w, h, n)
+    # TODO and then make a t x w x h and return that too
+    res2 = np.zeros((t, w, h))
+    print(res.shape)
+    return res
 
-    return timestepsToMaps
-
-# parses a txt file of bd info for each agent
 def parse_bd(bdfile):
-    # TODO implement
+    '''
+    parses a txt file of bd info for each agent
+    input: bdfile (string)
+    output: (N,W,H)
+    '''
     res = defaultdict(list)
     with open(bdfile, 'r') as fd:
         agent = 0
@@ -113,8 +150,10 @@ def parse_bd(bdfile):
             agent += 1
     for key in res:
         res[key] = np.asarray(res[key])
-    return res
+    
+    # TODO make this n x w x h 
 
+    return res
 
 # goes through a directory of maps, parsing each one and saving to a dictionary
 def batch_map(dir):
@@ -130,8 +169,7 @@ def batch_map(dir):
             val = parse_map(f)
             res[filename] = val # TODO make sure that filename doesn't have weird chars you don't want in the npz
         else:
-            print("bad map dir")
-            return False
+            raise RuntimeError("bad map dir")
     return res
 
 # goes through a directory of bd outputs, parsing each one and saving to a dictionary
@@ -147,8 +185,7 @@ def batch_bd(dir):
             res[filename] = val # TODO make sure that filename doesn't have weird chars you don't want in the npz
             print(f)
         else:
-            print("bad bd dir")
-            return False
+            raise RuntimeError("bad bd dir")
     return res
 
 # TODO goes through a directory of outputted EECBS paths, 
@@ -170,8 +207,7 @@ def batch_path(dir):
             res.append((mapname, bdname, val))
             print(f)
         else:
-            print("bad path dir")
-            return False
+            raise RuntimeError("bad path dir")
     return res
 
 def main():
@@ -194,30 +230,16 @@ def main():
     bds = {} # maps bdname->np array containing bd for each agent in the instance (NOTE: keep track of number agents in bdname)
     data = [] # contains all run instances, in the form of (map name, bd name)
 
-    # TODO parse each map, add to global dict
-    maps = batch_map(mapIn)
+    # # TODO parse each map, add to global dict
+    # maps = batch_map(mapIn)
+    # print(maps)
 
-    # error handling
-    if not maps:
-        print("error parsing maps")
-        return
-
-    # TODO parse each bd, add to global dict
-    bds = batch_bd(bdIn)
-    print(bds)
-
-    # error handling
-    if not bds:
-        print("error parsing bds")
-        return
+    # # TODO parse each bd, add to global dict
+    # bds = batch_bd(bdIn)
+    # print(bds)
 
     # TODO parse each path, add to global list of data
     data = batch_path(pathsIn)
-
-    # error handling
-    if not data:
-        print("error parsing data")
-        return
 
     # send each map, each bd, and each tuple representing a path + instance to npz
     print(data)

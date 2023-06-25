@@ -168,14 +168,18 @@ int main(int argc, char** argv)
         ecbs.setSavingStats(vm["stats"].as<bool>());
         ecbs.setHighLevelSolver(s, vm["suboptimality"].as<double>());
 
-		// write bd info to file
+        //////////////////////////////////////////////////////////////////////
+		// NEW: write bd info to file
+
 		print(ecbs.bds);
 		cout << ecbs.bds.size() << "\n";
 
 		ofstream file;
 		string vector_file = "./raw_data/bd/" + vm["agents"].as<string>() + std::to_string(vm["agentNum"].as<int>()) + ".txt";
 		file.open(vector_file);
-	
+		// write dimensions,
+		file << instance.num_of_rows << "," << instance.num_of_cols << endl;
+		// then bd information to file uniquely defined by instance and agent number
 		for(int i=0;i<ecbs.bds.size();i++)
 		{
 			for(int j = 0; j < ecbs.bds.at(i).size(); j++) {
@@ -205,7 +209,7 @@ int main(int argc, char** argv)
         if (vm.count("output"))
             ecbs.saveResults(vm["output"].as<string>(), vm["agents"].as<string>());
         if (ecbs.solution_found && vm.count("outputPaths"))
-            ecbs.savePaths(vm["outputPaths"].as<string>());
+            ecbs.savePaths(vm["outputPaths"].as<string>(), instance.num_of_rows, instance.num_of_cols);
         /*size_t pos = vm["output"].as<string>().rfind('.');      // position of the file extension
         string output_name = vm["output"].as<string>().substr(0, pos);     // get the name without extension
         cbs.saveCT(output_name); // for debug*/
@@ -247,7 +251,7 @@ int main(int argc, char** argv)
         if (vm.count("output"))
             cbs.saveResults(vm["output"].as<string>(), vm["agents"].as<string>());
         if (cbs.solution_found && vm.count("outputPaths"))
-            cbs.savePaths(vm["outputPaths"].as<string>());
+            cbs.savePaths(vm["outputPaths"].as<string>(), instance.num_of_rows, instance.num_of_cols);
         if (vm["stats"].as<bool>())
             cbs.saveStats(vm["output"].as<string>(), vm["agents"].as<string>());
         cbs.clearSearchEngines();
