@@ -37,9 +37,10 @@ class PipelineDataset():
         # TODO implement
         pass
 
-# Read map
 def parse_map(mapfile):
-    # mapfile = "../random-32-32-20.map"
+    '''
+    takes in a mapfile and returns a parsed np array
+    '''
     with open(mapfile) as f:
         line = f.readline()  # "type octile"
 
@@ -140,23 +141,44 @@ def parse_bd(bdfile):
     input: bdfile (string)
     output: (N,W,H)
     '''
-    res = defaultdict(list)
+    timetobd = defaultdict(list)
+    w, h = None, None
     with open(bdfile, 'r') as fd:
         agent = 0
+        linenum = 0
         for line in fd.readlines():
+            if linenum == 0: # parse dimensions and keep going
+                line = line[:-1]
+                line = line.split(",")
+                print(line)
+                w = int(line[0])
+                h = int(line[1])
+                linenum += 1
+                continue
             line = line[:-2]
             heuristics = line.split(",")
-            res[agent] = heuristics
+            timetobd[agent] = heuristics
             agent += 1
-    for key in res:
-        res[key] = np.asarray(res[key])
+    for key in timetobd:
+        timetobd[key] = np.asarray(timetobd[key])
     
-    # TODO make this n x w x h 
+    # TODO make this n x w x h (right now is n x wh)
+    res = []
+    for i in range(len(timetobd)):
+        res.append(timetobd[i])
+    res = np.asarray(res)
+    
+    print(res.shape, "asdfasdf")
 
     return res
 
-# goes through a directory of maps, parsing each one and saving to a dictionary
 def batch_map(dir):
+    '''
+    goes through a directory of maps, parsing each one and saving to a dictionary
+    input: directory of maps (string)
+    output: dictionary mapping filenames to parsed maps
+    '''
+
     res = {} # string->np
     # iterate over files in directory, parsing each map
     for filename in os.listdir(dir):
@@ -172,8 +194,12 @@ def batch_map(dir):
             raise RuntimeError("bad map dir")
     return res
 
-# goes through a directory of bd outputs, parsing each one and saving to a dictionary
 def batch_bd(dir):
+    '''
+    goes through a directory of bd outputs, parsing each one and saving to a dictionary
+    input: directory of backward djikstras (string)
+    output: dictionary mapping filenames to backward djikstras
+    '''
     res = {} # string->np
     # iterate over files in directory, parsing each map
     for filename in os.listdir(dir):
@@ -188,11 +214,13 @@ def batch_bd(dir):
             raise RuntimeError("bad bd dir")
     return res
 
-# TODO goes through a directory of outputted EECBS paths, 
-# returning a dictionary of tuples of the map name, bd name, and paths dictionary
-# NOTE we assume that the file of each path is formatted as 'raw_data/paths/mapnameandbdname.txt'
-# NOTE and also that bdname has agent number grandfathered into it
 def batch_path(dir):
+    '''
+        goes through a directory of outputted EECBS paths, 
+        returning a dictionary of tuples of the map name, bd name, and paths dictionary
+        NOTE we assume that the file of each path is formatted as 'raw_data/paths/mapnameandbdname.txt'
+        NOTE and also that bdname has agent number grandfathered into it
+    '''
     res = [] # list of (mapname, bdname, int->np.darray dictionary)
     # iterate over files in directory, making a tuple for each
     for filename in os.listdir(dir):
@@ -235,7 +263,7 @@ def main():
     # print(maps)
 
     # # TODO parse each bd, add to global dict
-    # bds = batch_bd(bdIn)
+    bds = batch_bd(bdIn)
     # print(bds)
 
     # TODO parse each path, add to global list of data
