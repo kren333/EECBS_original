@@ -21,7 +21,6 @@ mapsToNumAgents = {
 }
 
 class BatchRunner:
-    # TODO ADD THE DEFAULTS FOR OPTIMIZATION (make the defaults the offs)
     def __init__(self, mapfile, scenfile, timeLimit, suboptimality, batchFolderName):
         self.mapfile = mapfile
         self.scenfile = scenfile
@@ -30,28 +29,25 @@ class BatchRunner:
         self.batchFolderName = batchFolderName
 
     def runSingleSettingsOnMap(self, numAgents):
-        mods_str = "with_mods" if self.all_optimizations else "no_mods"
         for aSeed in self.seeds:
             command = "./build_release/eecbs -m {} -a {}".format(self.mapfile, self.scenfile)
             command += " --seed={} -k {} -t {}".format(aSeed, numAgents, self.timeLimit)
-            command += " --r_val={} --w_h={}".format(self.r, self.w_h)
             command += " --suboptimality={}".format(self.suboptimality)
-            command += " --batchFolder={} -o allresults{}{}{}.csv".format(self.batchFolderName, self.r, self.w_h, mods_str)
-            command += " --reuse_toggle={}".format(self.reuse_toggle)
+            command += " --batchFolder={} -o allresults.csv" # TODO format based on instance + agents
 
             subprocess.run(command.split(" "), check=False) # True if want failure error
     
     def detectAllFailed(self, numAgents):
         """
-        select all runs with the same hyperparameters (r, w_h, number agents, toggle, map, so)
+        select all runs with the same hyperparameters (number agents, map, so)
         if a set of hyperparams fails for all seeds, stop for all future # agents
         """ 
 
-        curOutputFile = "logs/{}/allresults{}{}{}.csv".format(self.batchFolderName, self.r, self.w_h, "with_mods" if self.all_optimizations else "no_mods")
+        curOutputFile = "logs/{}/allresults.csv".format(self.batchFolderName) # TODO change allresults to more descriptive name
         if exists(curOutputFile):
             df = pd.read_csv(curOutputFile)
-            df = df[(df["r val"] == self.r) & (df["num agents"] == numAgents) & (df["toggle set"] == self.reuse_toggle) \
-                    & (df["suboptimality"] == self.suboptimality) & (df["instance name"] == self.scenfile)]
+            df = df[(df["num agents"] == numAgents) \
+                    & (df["suboptimality"] == self.suboptimality) & (df["instance name"] == self.scenfile)] # TODO how do we treat suboptimality
             numFailed = len(df[(df["solution cost"] <= 0) | (df["solution cost"] >= 1073741823)])
             return len(df) == numFailed
         return False
@@ -69,7 +65,6 @@ class BatchRunner:
 ExpSettings = dict()
 
 def main():
-    # TODO: 1) run with random-32-32, 20, 30, 40 agents, 2) check parse, 3) add multiple maps (den312d) with same agent #s, 4) check parse file names again, 5) try pytorch
     parser = argparse.ArgumentParser()
     parser.add_argument("map", help="map to run", type=str) # Note: Positional is required, make not position by changing to --yKey
 
@@ -85,28 +80,19 @@ def main():
 
     myExps = []
 
-    for aSo in [1]:
-        aName = "base_so{}_toggle".format(aSo)
+    for aSo in [1, 1.2, 1.5, 2]: # TODO fix; how do we treat suboptimality
+        aName = "base_so{}".format(aSo)
         ExpSettings[aName] = dict(
             timeLimit=60,
             suboptimality=aSo,
-            reuse_toggle = 1
         )
         myExps.append(aName)
-        bName = "base_so{}_no_toggle".format(aSo)
-        ExpSettings[bName] = dict(
-            timeLimit=60,
-            suboptimality=aSo,
-            reuse_toggle = 0
-        )
-        myExps.append(bName)
 
     dateString = ""
     batchFolderName = "GridSubOptFast/GridSOFast{}_{}".format(dateString, curMap)
     
-    # seeds = [1, 2, 3, 4, 5]
     seeds = [1, 2, 3, 4, 5]
-    scens = [1, 2, 3, 4, 5][:1] # Just run one 1st scene
+    scens = [1, 2, 3, 4, 5] # TODO should we run all these scenes?
 
     for expName in myExps:
         print("Starting ExpSettings: {}".format(expName))
@@ -115,7 +101,7 @@ def main():
             print("  Starting scen number: {}".format(aScenNum))
             
             myBR = BatchRunner("{}/{}.map".format(mapfolder, curMap), "{}/{}-random-{}.scen".format(scenfolder, curMap, aScenNum),
-                exp["timeLimit"], exp["suboptimality"], 5, 4, batchFolderName, exp["reuse_toggle"])
+                exp["timeLimit"], exp["suboptimality"], batchFolderName)
             myBR.runBatchExps(rangeOfAgents, seeds)
 
 if __name__ == "__main__":
