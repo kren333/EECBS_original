@@ -1516,9 +1516,13 @@ vector<int> CBS::shuffleAgents() const
 
 	if (randomRoot)
 	{
-		std::random_device rd;
-		std::mt19937 g(rd());
-		std::shuffle(std::begin(agents), std::end(agents), g);
+		int g = rand();
+
+		std::shuffle(std::begin(agents), std::end(agents), std::default_random_engine(g)); // NEW implement the seed
+
+		// std::random_device rd;
+		// std::mt19937 g(rd());
+		// std::shuffle(std::begin(agents), std::end(agents), g);
 	}
 	return agents;
 }

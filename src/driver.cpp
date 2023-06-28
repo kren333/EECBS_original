@@ -43,6 +43,7 @@ int main(int argc, char** argv)
 		("cutoffTime,t", po::value<double>()->default_value(7200), "cutoff time (seconds)")
 		("screen,s", po::value<int>()->default_value(1), "screen option (0: none; 1: results; 2:all)")
 		("stats", po::value<bool>()->default_value(false), "write to files some detailed statistics")
+		("seed", po::value<int>()->default_value(5), "seed for tiebreaker low-level node selection") // NEW: seed
 
 		// params for CBS node selection strategies
 		("highLevelSolver", po::value<string>()->default_value("EES"), "the high-level solver (A*, A*eps, EES, NEW)")
@@ -140,8 +141,8 @@ int main(int argc, char** argv)
 	conflict_selection conflict = conflict_selection::EARLIEST;
 	node_selection n = node_selection::NODE_CONFLICTPAIRS;
 
-
-	srand((int)time(0));
+	int t = vm["seed"].as<int>();
+	srand(t);
 
 	///////////////////////////////////////////////////////////////////////////
 	// load the instance
