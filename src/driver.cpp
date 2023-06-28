@@ -43,6 +43,7 @@ int main(int argc, char** argv)
 		("cutoffTime,t", po::value<double>()->default_value(7200), "cutoff time (seconds)")
 		("screen,s", po::value<int>()->default_value(1), "screen option (0: none; 1: results; 2:all)")
 		("stats", po::value<bool>()->default_value(false), "write to files some detailed statistics")
+		("batchFolder", po::value<string>()->default_value(""), "Folder to save outputs") // NEW: batch output folder
 		("seed", po::value<int>()->default_value(5), "seed for tiebreaker low-level node selection") // NEW: seed
 
 		// params for CBS node selection strategies
@@ -141,8 +142,19 @@ int main(int argc, char** argv)
 	conflict_selection conflict = conflict_selection::EARLIEST;
 	node_selection n = node_selection::NODE_CONFLICTPAIRS;
 
+	// NEW: set the seed
 	int t = vm["seed"].as<int>();
 	srand(t);
+
+	// NEW: prepare log writing under batchrunner system
+	std::string results_path = "logs/";
+
+	string all_logs_dir;
+	if (vm["batchFolder"].as<string>() != "") {
+		all_logs_dir = results_path + vm["batchFolder"].as<string>();
+		boost::filesystem::create_directories(all_logs_dir);
+	}
+	auto saveResultsPath = all_logs_dir + "/" + vm["output"].as<string>();
 
 	///////////////////////////////////////////////////////////////////////////
 	// load the instance
