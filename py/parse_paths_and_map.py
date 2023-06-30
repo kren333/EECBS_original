@@ -241,7 +241,7 @@ def batch_path(dir):
             mapname = raw.split("-")[0] + ".map"
             bdname = raw
             val = parse_path(f) # get the path dict
-            print(mapname, bdname, seed, val)
+            # print(mapname, bdname, seed, val)
             res.append((mapname, bdname, seed, val))
             print(f)
         else:
@@ -280,7 +280,7 @@ def main():
     data = batch_path(pathsIn)
 
     # send each map, each bd, and each tuple representing a path + instance to npz
-    # print(data)
+    print([(d[0], d[1], d[2]) for d in data])
 
 if __name__ == "__main__":
     main()
