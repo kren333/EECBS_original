@@ -11,6 +11,8 @@
 #include <boost/tokenizer.hpp>
 #include "ECBS.h"
 #include <fstream>
+#include <boost/filesystem.hpp>
+#include <string.h>
 
 // TODO delete
 void print(vector <vector<int>> & a) {
@@ -184,11 +186,13 @@ int main(int argc, char** argv)
         //////////////////////////////////////////////////////////////////////
 		// NEW: write bd info to file
 
-		print(ecbs.bds);
-		cout << ecbs.bds.size() << "\n";
+		// print(ecbs.bds);
+		// cout << ecbs.bds.size() << "\n";
 
 		ofstream file;
-		string vector_file = "./raw_data/bd/" + vm["agents"].as<string>() + std::to_string(vm["agentNum"].as<int>()) + ".txt";
+		string scen = vm["agents"].as<string>().substr(17);
+		string vector_file = "./raw_data/bd/" + scen + std::to_string(vm["agentNum"].as<int>()) + ".txt";
+		cout << vector_file;
 		file.open(vector_file);
 		// write dimensions,
 		file << instance.num_of_rows << "," << instance.num_of_cols << endl;
@@ -220,7 +224,7 @@ int main(int argc, char** argv)
         }
         ecbs.runtime = runtime;
         if (vm.count("output"))
-            ecbs.saveResults(vm["output"].as<string>(), vm["agents"].as<string>());
+            ecbs.saveResults(saveResultsPath, vm["agents"].as<string>(), vm["seed"].as<int>(), vm["suboptimality"].as<double>(), vm["agentNum"].as<int>());
         if (ecbs.solution_found && vm.count("outputPaths"))
             ecbs.savePaths(vm["outputPaths"].as<string>(), instance.num_of_rows, instance.num_of_cols);
         /*size_t pos = vm["output"].as<string>().rfind('.');      // position of the file extension
@@ -262,7 +266,7 @@ int main(int argc, char** argv)
         }
         cbs.runtime = runtime;
         if (vm.count("output"))
-            cbs.saveResults(vm["output"].as<string>(), vm["agents"].as<string>());
+            cbs.saveResults(saveResultsPath, vm["agents"].as<string>(), vm["seed"].as<int>(), vm["suboptimality"].as<double>(), vm["agentNum"].as<int>());
         if (cbs.solution_found && vm.count("outputPaths"))
             cbs.savePaths(vm["outputPaths"].as<string>(), instance.num_of_rows, instance.num_of_cols);
         if (vm["stats"].as<bool>())

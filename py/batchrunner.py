@@ -31,10 +31,15 @@ class BatchRunner:
     def runSingleSettingsOnMap(self, numAgents):
         for aSeed in self.seeds:
             command = "./build_release/eecbs -m {} -a {}".format(self.mapfile, self.scenfile)
+            scensplit = self.scenfile.split(".scen")[0]
+            scensplit = scensplit.split("/")[-1]
+            print(scensplit)
+            # command += " --outputPaths={}".format("./raw_data/paths/" + "scen" + scensplit + "numAg" + str(numAgents) + "sD" + str(aSeed) + ".txt")
+            # command += " --outputPaths={}".format("./raw_data/paths/" + scensplit + ".txt")
+            command += " --outputPaths={}".format("./raw_data/paths/" + scensplit + str(numAgents) + str(aSeed) + ".txt") # TODO format based on instance + agents + seed
             command += " --seed={} -k {} -t {}".format(aSeed, numAgents, self.timeLimit)
             command += " --suboptimality={}".format(self.suboptimality)
-            command += " --batchFolder={} -o allresults.csv" # TODO format based on instance + agents
-
+            command += " --batchFolder={} -o allresults.csv".format(self.batchFolderName) 
             subprocess.run(command.split(" "), check=False) # True if want failure error
     
     def detectAllFailed(self, numAgents):
@@ -46,8 +51,9 @@ class BatchRunner:
         curOutputFile = "logs/{}/allresults.csv".format(self.batchFolderName) # TODO change allresults to more descriptive name
         if exists(curOutputFile):
             df = pd.read_csv(curOutputFile)
-            df = df[(df["num agents"] == numAgents) \
-                    & (df["suboptimality"] == self.suboptimality) & (df["instance name"] == self.scenfile)] # TODO how do we treat suboptimality
+            df = df[(df["agent num"] == numAgents)]
+            df = df[(df["suboptimality"] == self.suboptimality)]
+            df = df[(df["instance name"] == self.scenfile)]
             numFailed = len(df[(df["solution cost"] <= 0) | (df["solution cost"] >= 1073741823)])
             return len(df) == numFailed
         return False
@@ -80,7 +86,7 @@ def main():
 
     myExps = []
 
-    for aSo in [1, 1.2, 1.5, 2]: # TODO fix; how do we treat suboptimality
+    for aSo in [2.2]: # TODO fix; how do we treat suboptimality
         aName = "base_so{}".format(aSo)
         ExpSettings[aName] = dict(
             timeLimit=60,

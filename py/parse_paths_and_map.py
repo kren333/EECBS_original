@@ -93,7 +93,6 @@ def parse_path(pathfile):
             if linenum == 0: # parse dimensions of map and keep going
                 line = line[:-1]
                 line = line.split(",")
-                print(line)
                 w = int(line[0])
                 h = int(line[1])
                 linenum += 1
@@ -108,8 +107,8 @@ def parse_path(pathfile):
             # add the coordinates to the dictionary of maps
             for i, coord in enumerate(rawCoords):
                 temp = coord.split(',')
-                x = temp[0][1:]
-                y = temp[1][:-1]
+                x = int(temp[0][1:])
+                y = int(temp[1][:-1])
                 # if you're at the last coordinate then append it to the rest of the maps
                 if i == len(rawCoords) - 1:
                     while i != maxTimesteps:
@@ -126,14 +125,23 @@ def parse_path(pathfile):
     res = []
     for i in range(len(timestepsToMaps)):
         res.append(timestepsToMaps[i])
-    
-    res = np.asarray(res)
-    t, n, _ = res.shape
-    print(t, w, h, n)
+
+    t, n = len(res), len(res[0])
+
     # TODO and then make a t x w x h and return that too
     res2 = np.zeros((t, w, h))
-    print(res.shape)
-    return res
+    inc = 0
+    for time in range(t):
+        arr = res[time]
+        for agent in range(n):
+            width, height = arr[agent]
+            res2[time][width][height] = 1
+
+    res = np.asarray(res)
+    print(t, w, h, n)
+
+    # res2 = [[[1 if [width, height] in res[time] else 0 for width in range(w)] for height in range(h)] for time in range(t)]
+    return res, res2
 
 def parse_bd(bdfile):
     '''
@@ -150,7 +158,6 @@ def parse_bd(bdfile):
             if linenum == 0: # parse dimensions and keep going
                 line = line[:-1]
                 line = line.split(",")
-                print(line)
                 w = int(line[0])
                 h = int(line[1])
                 linenum += 1
@@ -162,14 +169,12 @@ def parse_bd(bdfile):
     for key in timetobd:
         timetobd[key] = np.asarray(timetobd[key])
     
-    # TODO make this n x w x h (right now is n x wh)
+    # make this n x w x h (right now is n x wh)
     res = []
     for i in range(len(timetobd)):
         res.append(timetobd[i])
     res = np.asarray(res)
     
-    print(res.shape, "asdfasdf")
-
     return res
 
 def batch_map(dir):
@@ -208,7 +213,8 @@ def batch_bd(dir):
         if os.path.isfile(f):
             # parse the bd file and add to a global dictionary (or some class variable dictionary)
             val = parse_bd(f)
-            res[filename] = val # TODO make sure that filename doesn't have weird chars you don't want in the npz
+            bdname, agents = (filename.split(".txt")[0]).split(".scen") # e.g. "Paris_1_256-random-110, where 1 is instance, 10 is agents"
+            res[bdname + agents] = val # TODO make sure that filename doesn't have weird chars you don't want in the npz
             print(f)
         else:
             raise RuntimeError("bad bd dir")
@@ -227,12 +233,16 @@ def batch_path(dir):
         f = os.path.join(dir, filename)
         # checking if it is a file
         if os.path.isfile(f):
-            # TODO parse the path file, regex its map name and bd that it was formed from based on file name, 
+            # parse the path file, index out its map name, seed, agent number, and bd that it was formed from based on file name, 
             # and add the resulting triplet to a global dictionary (or some class variable dictionary)
-            raw = filename.split("and") # isolate map name, bd name
-            mapname, bdname = raw[0], raw[1]
+            raw = filename.split(".txt")[0] # remove .txt
+            seed = raw[-1]
+            raw = raw[:-1]
+            mapname = raw.split("-")[0] + ".map"
+            bdname = raw
             val = parse_path(f) # get the path dict
-            res.append((mapname, bdname, val))
+            print(mapname, bdname, seed, val)
+            res.append((mapname, bdname, seed, val))
             print(f)
         else:
             raise RuntimeError("bad path dir")
@@ -258,19 +268,19 @@ def main():
     bds = {} # maps bdname->np array containing bd for each agent in the instance (NOTE: keep track of number agents in bdname)
     data = [] # contains all run instances, in the form of (map name, bd name)
 
-    # # TODO parse each map, add to global dict
-    # maps = batch_map(mapIn)
-    # print(maps)
+    # TODO parse each map, add to global dict
+    maps = batch_map(mapIn)
+    print(maps)
 
     # # TODO parse each bd, add to global dict
     bds = batch_bd(bdIn)
-    # print(bds)
+    print(bds)
 
     # TODO parse each path, add to global list of data
     data = batch_path(pathsIn)
 
     # send each map, each bd, and each tuple representing a path + instance to npz
-    print(data)
+    # print(data)
 
 if __name__ == "__main__":
     main()
