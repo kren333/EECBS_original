@@ -86,7 +86,7 @@ def main():
 
     myExps = []
 
-    for aSo in [2.2]: # TODO fix; how do we treat suboptimality
+    for aSo in [1.5]: # TODO fix; how do we treat suboptimality
         aName = "base_so{}".format(aSo)
         ExpSettings[aName] = dict(
             timeLimit=60,

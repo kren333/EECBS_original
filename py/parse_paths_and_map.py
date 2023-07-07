@@ -8,6 +8,8 @@ import argparse
 import pdb
 import pandas as pd
 from os.path import exists
+import torchvision
+from torch.utils.data import Dataset
 from collections import defaultdict
 import pdb
 
@@ -22,20 +24,63 @@ import pdb
 
 # TODO make this inherit torch.utils.data.Dataset
 # will probably be helpful for future pipeline purposes when we want to use pytorch
-class PipelineDataset():
+class PipelineDataset(Dataset):
     # instantiate class variables
-    def __init__(self):
-        # TODO implement
-        pass
+    def __init__(self, numpy_data_path):
+        # read in the dataset
+        loaded = np.load(numpy_data_path)
+        loaded = {k:v for k, v in loaded.items()}
+        items = list(loaded.items())
+        print(loaded["Paris_1_256.map,Paris_1_256-random-110,2"]) # testing
+        # index -> tuple mapping, finding maps, then bds, then paths
+        i = 0
+        while "-random-" not in items[i][0]:
+            i += 1
+        self.maps = dict(items[:i]) # get all the maps
+        j = i
+        while "," not in items[j][0]:
+            j += 1
+        self.bds = dict(items[i:j]) # get all the bds
+        k = j
+        while k < len(items) and "twh" not in items[k][0]:
+            k += 1
+        self.tn2 = dict(items[j:k]) # get all the paths in (t,n,2) form
+        # since the # of data is simply number of agent locations, this is t*n, which we append to the dictionary for each path
+        for k, v in self.tn2.items():
+            t, n, _ = np.shape(v)
+            self.tn2[k] = (t*n, v)
+        # self.twh = dict(items[k:]) # get all the paths in (t,w,h) form
    
     # get number of instances in total (length of training data)
     def __len__(self):
-        return len(self.data)
+        return sum([value[0] for value in self.tn2.values()]) # go through the tn2 dict with # data and np arrays saved, and sum all the ints
 
-    # return the data for a particular instance
+    # return the data for a particular instance: the location, bd, and map
     def __getitem__(self, idx):
-        # TODO implement
-        pass
+        def translate_to_bd(bd):
+            bd = bd.split("-random-")
+            bd = bd[0] + "-random-" + bd[1][0] + "200"
+            return bd
+        items = list(self.tn2.items())
+        tn2ind = 0
+        tracker = 0
+        while tracker + items[tn2ind][1][0] <= idx:
+            tracker += items[tn2ind][1][0] # add number of data in the (t,n,2) matrix
+            tn2ind += 1
+        # so now tn2ind holds the index to the (t,n,2) matrix containing the data we want
+        mapname, bdname, seed = items[tn2ind][0].split(",")
+        bdname = translate_to_bd(bdname)
+        bd = self.bds[bdname]
+        grid = self.maps[mapname]
+        # get the location, dir to next location
+        newidx = idx - tracker # index within the matrix to get
+        matrix = items[tn2ind][1][1]
+        t, n, _ = np.shape(matrix)
+        row, col = newidx // n, newidx % n
+        curloc = matrix[row][col]
+        nextloc = matrix[row+1][col] if row < t-1 else None
+        # return cur location, map, bd, and next location
+        return curloc, grid, bd[col], nextloc
 
 def parse_map(mapfile):
     '''
@@ -85,7 +130,6 @@ def parse_path(pathfile):
                 if c == ',': timesteps += 1
             maxTimesteps = max(maxTimesteps, timesteps)
             linenum += 1
-    print(linenum, maxTimesteps)
     # get path for each agent and update dictionary of maps accordingly
     with open(pathfile, 'r') as fd:
         linenum = 0
@@ -130,18 +174,18 @@ def parse_path(pathfile):
 
     # TODO and then make a t x w x h and return that too
     res2 = np.zeros((t, w, h))
-    inc = 0
+    res2 -= 1 # if no agent, -1
     for time in range(t):
         arr = res[time]
         for agent in range(n):
             width, height = arr[agent]
-            res2[time][width][height] = 1
+            res2[time][width][height] = agent
 
     res = np.asarray(res)
     print(t, w, h, n)
 
     # res2 = [[[1 if [width, height] in res[time] else 0 for width in range(w)] for height in range(h)] for time in range(t)]
-    return res, res2
+    return res
 
 def parse_bd(bdfile):
     '''
@@ -227,7 +271,8 @@ def batch_path(dir):
         NOTE we assume that the file of each path is formatted as 'raw_data/paths/mapnameandbdname.txt'
         NOTE and also that bdname has agent number grandfathered into it
     '''
-    res = [] # list of (mapname, bdname, int->np.darray dictionary)
+    res1 = {} # dict of (mapname, bdname, int->np.darray dictionary), and is (n, t, 2)
+    res2 = {} # dict of (mapname, bdname, int->np.darray dictionary), and is (t, w, h)
     # iterate over files in directory, making a tuple for each
     for filename in os.listdir(dir):
         f = os.path.join(dir, filename)
@@ -240,13 +285,15 @@ def batch_path(dir):
             raw = raw[:-1]
             mapname = raw.split("-")[0] + ".map"
             bdname = raw
-            val = parse_path(f) # get the path dict
-            # print(mapname, bdname, seed, val)
-            res.append((mapname, bdname, seed, val))
+            val = parse_path(f) # get the 2 types of paths: the first being a list of agent locations for each timestep, the 2nd being a map for each timestep with -1 if no agent, agent number otherwise
+            # print(mapname, bdname, seed, np.count_nonzero(val2 != -1)) # debug statement
+            print("___________________________\n")
+            res1[mapname + "," + bdname + "," + seed] = val
+            # res2[mapname + "," + bdname + "," + seed + ",twh"] = val2
             print(f)
         else:
             raise RuntimeError("bad path dir")
-    return res
+    return res1
 
 def main():
     # cmdline argument parsing: take in dirs for paths, maps, and bds, and where you want the outputted npz
@@ -270,17 +317,26 @@ def main():
 
     # TODO parse each map, add to global dict
     maps = batch_map(mapIn)
-    print(maps)
+    # print(maps)
 
-    # # TODO parse each bd, add to global dict
+    # # # TODO parse each bd, add to global dict
     bds = batch_bd(bdIn)
-    print(bds)
+    # print(bds)
 
     # TODO parse each path, add to global list of data
-    data = batch_path(pathsIn)
+    data1 = batch_path(pathsIn)
 
     # send each map, each bd, and each tuple representing a path + instance to npz
-    print([(d[0], d[1], d[2]) for d in data])
+    np.savez_compressed(npzOut, **maps, **bds, **data1) # Note automatically stacks to numpy vectors
+
+    # DEBUGGING: test out the dataloader
+    loader = PipelineDataset(npzOut + ".npz")
+    print(loader.bds.keys())
+    tn2s = {k:v for k, v in loader.tn2.items()}
+    print(tn2s.keys())
+    print(loader.__len__())
+    print(loader.__getitem__(24297199))
+
 
 if __name__ == "__main__":
     main()
