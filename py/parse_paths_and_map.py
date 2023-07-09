@@ -90,6 +90,7 @@ class PipelineDataset(Dataset):
         timestep, agent = newidx // n, newidx % n
         curloc = paths[timestep, agent]
         nextloc = paths[timestep+1, agent] if timestep < t-1 else curloc
+        print(curloc)
 
         # TODO have ids of 4 closest agents within the window (will be passing in the bds of those 4 agents)
         # 1. get ids of 4 closest agents
@@ -109,8 +110,11 @@ class PipelineDataset(Dataset):
         # return 2k+1 by 2k+1 grid centered at agent's current location for both the map, bd
         print(len(bd))
         grid = grid[curloc[0]-self.k:curloc[0]+self.k+1, curloc[1]-self.k:curloc[1]+self.k+1]
+        print(len(grid), len(grid[0]))
+        print(np.shape(bd[agent]))
         dijk = bd[agent][curloc[0]-self.k:curloc[0]+self.k+1, curloc[1]-self.k:curloc[1]+self.k+1]
-        helper_bds = [bd[inwindow] for inwindow in windowAgents]
+        print(len(dijk), len(dijk[0]))
+        helper_bds = [bd[inwindow[1]][curloc[0]-self.k:curloc[0]+self.k+1, curloc[1]-self.k:curloc[1]+self.k+1] for inwindow in windowAgents] # for each of the (at most) 4 nearby agents, get their bds centered at the current agent's location
 
         return grid, dijk, helper_bds, nextloc - curloc
     
@@ -390,21 +394,21 @@ def main():
     data = [] # contains all run instances, in the form of (map name, bd name)
 
     # TODO parse each map, add to global dict
-    maps = batch_map(mapIn)
+    # maps = batch_map(mapIn)
     # print(maps)
 
     # # # TODO parse each bd, add to global dict
-    bds = batch_bd(bdIn)
+    # bds = batch_bd(bdIn)
     # print(bds)
 
     # TODO parse each path, add to global list of data
-    data1 = batch_path(pathsIn)
+    # data1 = batch_path(pathsIn)
 
     # send each map, each bd, and each tuple representing a path + instance to npz
-    np.savez_compressed(npzOut, **maps, **bds, **data1) # Note automatically stacks to numpy vectors
+    # np.savez_compressed(npzOut, **maps, **bds, **data1) # Note automatically stacks to numpy vectors
 
     # DEBUGGING: test out the dataloader
-    loader = PipelineDataset(npzOut + ".npz", 400)
+    loader = PipelineDataset(npzOut + ".npz", 10)
     print(loader.bds.keys())
     # tn2s = {k:v for k, v in loader.tn2.items()}
     # print(tn2s.keys())
