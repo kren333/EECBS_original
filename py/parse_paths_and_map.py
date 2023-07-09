@@ -12,6 +12,7 @@ import torchvision
 from torch.utils.data import Dataset
 from collections import defaultdict
 import pdb
+import math
 
 '''
 0. parse bd (fix eecbs by having it make another txt output, parse it here)
@@ -24,14 +25,106 @@ import pdb
 
 # TODO make this inherit torch.utils.data.Dataset
 # will probably be helpful for future pipeline purposes when we want to use pytorch
-class PipelineDataset(Dataset):
+class PipelineDataset(Dataset):        
+
     # instantiate class variables
-    def __init__(self, numpy_data_path):
-        # read in the dataset
+    def __init__(self, numpy_data_path, k):
+        '''
+        INPUT: 
+            numpy_data_path: the path to the npz file storing all map, backward dijkstra, and path information across all EECBS runs. (string)
+            k: window size. (int)
+        contains 3 class variables: self.maps, self.bds, and self.tn2.
+        maps: a dictionary mapping mapname (name.map) to the np (w,h) of all obstacle locations. (1s for obstacles, 0s for free space)
+            e.g. {"Paris_1_256.map": (256,256)}
+        bds: a dictionary mapping backward dijkstra names to the np (n,w,h) of all backward dijkstra calculations for all agents.
+            e.g. {"Paris_1_256-random-1{max_agents}": ({max_agents},256,256)}
+            naming convention: scen name + # agents
+        tn2: a dictionary mapping eecbs instance names to the np (t,n,2) of all paths (x,y) for all agents.
+            e.g. {"Paris_1_256.map,Paris_1_256-random-110,2": (t,n,2)}
+            naming convention: mapname + "," + bdname + "," + seed        
+        '''
+
+        # read in the dataset, saving map, bd, and path info to class variables
         loaded = np.load(numpy_data_path)
+        self.parse_npz(loaded)
+        self.k = k
+   
+    # get number of instances in total (length of training data)
+    def __len__(self):
+        return self.length # go through the tn2 dict with # data and np arrays saved, and sum all the ints
+
+    # return the data for a particular instance: the location, bd, and map
+    def __getitem__(self, idx):
+        '''
+        INPUT: index (must be smaller than len(self))
+        OUTPUT: map, bd, and direction
+            map: (w,h) TODO: (2k+1, 2k+1)
+            bd: (w,h)
+            direction: (2)
+        TODO: centered version. when passing in the map and bd, return a (2k+1,2k+1) window centered at current location of agent. 
+        '''
+        if idx >= self.__len__():
+            print("Index too large for {}-sample dataset".format(self.__len__()))
+            return
+
+        def translate_to_bd(bd):
+            bd = bd.split("-random-")
+            bd = bd[0] + "-random-" + bd[1][0] + "200"
+            return bd
+        
+        items = list(self.tn2.items())
+        tn2ind = 0
+        tracker = 0
+        while tracker + items[tn2ind][1][0] <= idx:
+            tracker += items[tn2ind][1][0] # add number of data in the (t,n,2) matrix
+            tn2ind += 1
+        # so now tn2ind holds the index to the (t,n,2) matrix containing the data we want
+        mapname, bdname, seed = items[tn2ind][0].split(",")
+        bdname = translate_to_bd(bdname)
+        bd = self.bds[bdname]
+        grid = self.maps[mapname]
+        # get the location, dir to next location
+        newidx = idx - tracker # index within the matrix to get
+        paths = items[tn2ind][1][1] # (t,n,2) paths matrix
+        t, n, _ = np.shape(paths)
+        timestep, agent = newidx // n, newidx % n
+        curloc = paths[timestep, agent]
+        nextloc = paths[timestep+1, agent] if timestep < t-1 else curloc
+
+        # TODO have ids of 4 closest agents within the window (will be passing in the bds of those 4 agents)
+        # 1. get ids of 4 closest agents
+        # 2. for all those agents that are in the window, return their bd centered at current location
+        # e.g. bd[agent 2, curlocx-k:curlocx+k+1,curlocy-k:curlocy+k+1]
+        # return map, bd, and direction TODO get the window in postprocess
+
+        # get the agents within the window (that are not the agent we are looking at),
+        windowAgents = list(filter(lambda loc: abs(loc[1][0]-curloc[0]) <= self.k and abs(loc[1][1]-curloc[1]) <= self.k and loc[0] != agent, enumerate(paths[timestep])))
+        # and create list of tuples of (euclidean distance from agent,agentnumber)
+        windowAgents = list(map(lambda tup: (math.sqrt((tup[1][0]-curloc[0])**2 + (tup[1][1]-curloc[1])**2), tup[0]), windowAgents))
+        # get the 4 closest agents, if possible
+        windowAgents.sort()
+        windowAgents = windowAgents[:4]
+        print("WINDOW AGENTS: ", windowAgents)
+
+        # return 2k+1 by 2k+1 grid centered at agent's current location for both the map, bd
+        print(len(bd))
+        grid = grid[curloc[0]-self.k:curloc[0]+self.k+1, curloc[1]-self.k:curloc[1]+self.k+1]
+        dijk = bd[agent][curloc[0]-self.k:curloc[0]+self.k+1, curloc[1]-self.k:curloc[1]+self.k+1]
+        helper_bds = [bd[inwindow] for inwindow in windowAgents]
+
+        return grid, dijk, helper_bds, nextloc - curloc
+    
+    def find_instance(self, idx):
+        '''
+        returns the backward dijkstra, map, and path arrays, and indices to get into the path array
+        '''
+        pass
+        # TODO implement; essentially lines 68-83 (85? 86?)
+
+    def parse_npz(self, loaded):
         loaded = {k:v for k, v in loaded.items()}
         items = list(loaded.items())
-        print(loaded["Paris_1_256.map,Paris_1_256-random-110,2"]) # testing
+        # print(loaded["Paris_1_256.map,Paris_1_256-random-110,2"]) # testing
         # index -> tuple mapping, finding maps, then bds, then paths
         i = 0
         while "-random-" not in items[i][0]:
@@ -49,38 +142,10 @@ class PipelineDataset(Dataset):
         for k, v in self.tn2.items():
             t, n, _ = np.shape(v)
             self.tn2[k] = (t*n, v)
+        self.length = sum([value[0] for value in self.tn2.values()])
         # self.twh = dict(items[k:]) # get all the paths in (t,w,h) form
-   
-    # get number of instances in total (length of training data)
-    def __len__(self):
-        return sum([value[0] for value in self.tn2.values()]) # go through the tn2 dict with # data and np arrays saved, and sum all the ints
 
-    # return the data for a particular instance: the location, bd, and map
-    def __getitem__(self, idx):
-        def translate_to_bd(bd):
-            bd = bd.split("-random-")
-            bd = bd[0] + "-random-" + bd[1][0] + "200"
-            return bd
-        items = list(self.tn2.items())
-        tn2ind = 0
-        tracker = 0
-        while tracker + items[tn2ind][1][0] <= idx:
-            tracker += items[tn2ind][1][0] # add number of data in the (t,n,2) matrix
-            tn2ind += 1
-        # so now tn2ind holds the index to the (t,n,2) matrix containing the data we want
-        mapname, bdname, seed = items[tn2ind][0].split(",")
-        bdname = translate_to_bd(bdname)
-        bd = self.bds[bdname]
-        grid = self.maps[mapname]
-        # get the location, dir to next location
-        newidx = idx - tracker # index within the matrix to get
-        matrix = items[tn2ind][1][1]
-        t, n, _ = np.shape(matrix)
-        row, col = newidx // n, newidx % n
-        curloc = matrix[row][col]
-        nextloc = matrix[row+1][col] if row < t-1 else None
-        # return cur location, map, bd, and next location
-        return curloc, grid, bd[col], nextloc
+
 
 def parse_map(mapfile):
     '''
@@ -212,8 +277,17 @@ def parse_bd(bdfile):
             agent += 1
     for key in timetobd:
         timetobd[key] = np.asarray(timetobd[key])
+        nwh = timetobd[key]
+        new = []
+        assert(not len(nwh) % w and not len(nwh) % h)
+        # transform to n x w x h here, assuming row-major order
+        while len(nwh):
+            takeaway = nwh[:w]
+            new.append(takeaway)
+            nwh = nwh[w:]
+        timetobd[key] = new
     
-    # make this n x w x h (right now is n x wh)
+    # make this n x w x h from dictionary of n w x h arrays
     res = []
     for i in range(len(timetobd)):
         res.append(timetobd[i])
@@ -238,7 +312,7 @@ def batch_map(dir):
             if ".DS_Store" in f: continue # deal with invisible ds_store file
             # parse the map file and add to a global dictionary (or some class variable dictionary)
             val = parse_map(f)
-            res[filename] = val # TODO make sure that filename doesn't have weird chars you don't want in the npz
+            res[filename] = val 
         else:
             raise RuntimeError("bad map dir")
     return res
@@ -330,12 +404,15 @@ def main():
     np.savez_compressed(npzOut, **maps, **bds, **data1) # Note automatically stacks to numpy vectors
 
     # DEBUGGING: test out the dataloader
-    loader = PipelineDataset(npzOut + ".npz")
+    loader = PipelineDataset(npzOut + ".npz", 400)
     print(loader.bds.keys())
-    tn2s = {k:v for k, v in loader.tn2.items()}
-    print(tn2s.keys())
-    print(loader.__len__())
-    print(loader.__getitem__(24297199))
+    # tn2s = {k:v for k, v in loader.tn2.items()}
+    # print(tn2s.keys())
+    print(len(loader))
+    print("2nd TO LAST ITEM")
+    print(loader[24297199])
+    print("LAST ITEM")
+    print(loader[24297200])
 
 
 if __name__ == "__main__":
