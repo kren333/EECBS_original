@@ -83,9 +83,13 @@ class PipelineDataset(Dataset):
         windowAgents = list(filter(lambda loc: abs(loc[1][0]-curloc[0]) <= self.k and abs(loc[1][1]-curloc[1]) <= self.k and loc[0] != agent, enumerate(paths[timestep])))
         # and create list of tuples of (euclidean distance from agent,agentnumber)
         windowAgents = list(map(lambda tup: (math.sqrt((tup[1][0]-curloc[0])**2 + (tup[1][1]-curloc[1])**2), tup[0]), windowAgents))
+        # get the x,y indices of all agents within k distance
+        
         # get the 4 closest agents, if possible
         windowAgents.sort()
         windowAgents = windowAgents[:4]
+        windowAgentIdxs = [agent[1] for agent in windowAgents]
+        windowAgentLocs = paths[timestep][windowAgentIdxs]
         print("WINDOW AGENTS: ", windowAgents)
 
         # return 2k+1 by 2k+1 grid centered at agent's current location for both the map, bd
@@ -98,7 +102,7 @@ class PipelineDataset(Dataset):
         helper_bds = [bd[inwindow[1]][curloc[0]-self.k:curloc[0]+self.k+1, curloc[1]-self.k:curloc[1]+self.k+1] for inwindow in windowAgents] # for each of the (at most) 4 nearby agents, get their bds centered at the current agent's location
         helper_bds = np.array(helper_bds)
 
-        return grid, dijk, helper_bds, nextloc - curloc
+        return grid, dijk, helper_bds, windowAgentLocs - curloc, nextloc - curloc
     
     def find_instance(self, idx):
         '''
