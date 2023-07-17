@@ -25,12 +25,12 @@ import math
 
 # TODO make this inherit torch.utils.data.Dataset
 # will probably be helpful for future pipeline purposes when we want to use pytorch
-class PipelineDataset(Dataset):        
+class PipelineDataset(Dataset):
 
     # instantiate class variables
     def __init__(self, numpy_data_path, k):
         '''
-        INPUT: 
+        INPUT:
             numpy_data_path: the path to the npz file storing all map, backward dijkstra, and path information across all EECBS runs. (string)
             k: window size. (int)
         contains 3 class variables: self.maps, self.bds, and self.tn2.
@@ -41,14 +41,14 @@ class PipelineDataset(Dataset):
             naming convention: scen name + # agents
         tn2: a dictionary mapping eecbs instance names to the np (t,n,2) of all paths (x,y) for all agents.
             e.g. {"Paris_1_256.map,Paris_1_256-random-110,2": (t,n,2)}
-            naming convention: mapname + "," + bdname + "," + seed        
+            naming convention: mapname + "," + bdname + "," + seed
         '''
 
         # read in the dataset, saving map, bd, and path info to class variables
         loaded = np.load(numpy_data_path)
         self.parse_npz(loaded)
         self.k = k
-   
+
     # get number of instances in total (length of training data)
     def __len__(self):
         return self.length # go through the tn2 dict with # data and np arrays saved, and sum all the ints
@@ -62,7 +62,7 @@ class PipelineDataset(Dataset):
             bd: (2k+1, 2k+1)
             other agent bds: (4,2k+1,2k+1)
             direction: (2)
-        centered version. when passing in the map and bd, return a (2k+1,2k+1) window centered at current location of agent. 
+        centered version. when passing in the map and bd, return a (2k+1,2k+1) window centered at current location of agent.
         '''
         if idx >= self.__len__():
             print("Index too large for {}-sample dataset".format(self.__len__()))
@@ -83,7 +83,7 @@ class PipelineDataset(Dataset):
         windowAgents = list(filter(lambda loc: abs(loc[1][0]-curloc[0]) <= self.k and abs(loc[1][1]-curloc[1]) <= self.k and loc[0] != agent, enumerate(paths[timestep])))
         # and create list of tuples of (euclidean distance from agent,agentnumber)
         windowAgents = list(map(lambda tup: (math.sqrt((tup[1][0]-curloc[0])**2 + (tup[1][1]-curloc[1])**2), tup[0]), windowAgents))
-        
+
         # get the 4 closest agents, if possible
         windowAgents.sort()
         windowAgents = windowAgents[:4]
@@ -102,8 +102,12 @@ class PipelineDataset(Dataset):
         helper_bds = [bd[inwindow[1]][curloc[0]-self.k:curloc[0]+self.k+1, curloc[1]-self.k:curloc[1]+self.k+1] for inwindow in windowAgents] # for each of the (at most) 4 nearby agents, get their bds centered at the current agent's location
         helper_bds = np.array(helper_bds)
 
+        #TODO one hot vectorness
+
+
+        #TODO fix padding helper_bds and windowagents and then make them numpy compatible
         return grid, dijk, helper_bds, windowAgentLocs - curloc, nextloc - curloc
-    
+
     def find_instance(self, idx):
         '''
         returns the backward dijkstra, map, and path arrays, and indices to get into the path array
@@ -112,7 +116,7 @@ class PipelineDataset(Dataset):
             bd = bd.split("-random-")
             bd = bd[0] + "-random-" + bd[1][0] + "50" # TODO fix: adapt to be max number agents
             return bd
-        
+
         items = list(self.tn2.items())
         tn2ind = 0
         tracker = 0
@@ -201,7 +205,7 @@ def parse_path(pathfile):
     with open(pathfile, 'r') as fd:
         linenum = 0
         for line in fd.readlines():
-            if linenum == 0: 
+            if linenum == 0:
                 linenum += 1
                 continue # ignore dimension line
             timesteps = 0
@@ -239,11 +243,11 @@ def parse_path(pathfile):
                         i += 1
                 else: timestepsToMaps[i].append([x, y])
             linenum += 1
-    
+
     # make each map a np array
     for key in timestepsToMaps:
         timestepsToMaps[key] = np.asarray(timestepsToMaps[key])
-    
+
     # make this t x n x 2
     res = []
     for i in range(len(timestepsToMaps)):
@@ -300,13 +304,13 @@ def parse_bd(bdfile):
             new.append(takeaway)
             nwh = nwh[w:]
         timetobd[key] = new
-    
+
     # make this n x w x h from dictionary of n w x h arrays
     res = []
     for i in range(len(timetobd)):
         res.append(timetobd[i])
     res = np.asarray(res)
-    
+
     return res
 
 def batch_map(dir):
@@ -326,7 +330,7 @@ def batch_map(dir):
             if ".DS_Store" in f: continue # deal with invisible ds_store file
             # parse the map file and add to a global dictionary (or some class variable dictionary)
             val = parse_map(f)
-            res[filename] = val 
+            res[filename] = val
         else:
             raise RuntimeError("bad map dir")
     return res
@@ -354,7 +358,7 @@ def batch_bd(dir):
 
 def batch_path(dir):
     '''
-        goes through a directory of outputted EECBS paths, 
+        goes through a directory of outputted EECBS paths,
         returning a dictionary of tuples of the map name, bd name, and paths dictionary
         NOTE we assume that the file of each path is formatted as 'raw_data/paths/mapnameandbdname.txt'
         NOTE and also that bdname has agent number grandfathered into it
@@ -366,7 +370,7 @@ def batch_path(dir):
         f = os.path.join(dir, filename)
         # checking if it is a file
         if os.path.isfile(f):
-            # parse the path file, index out its map name, seed, agent number, and bd that it was formed from based on file name, 
+            # parse the path file, index out its map name, seed, agent number, and bd that it was formed from based on file name,
             # and add the resulting triplet to a global dictionary (or some class variable dictionary)
             raw = filename.split(".txt")[0] # remove .txt
             seed = raw[-1]
@@ -387,10 +391,10 @@ def main():
     # cmdline argument parsing: take in dirs for paths, maps, and bds, and where you want the outputted npz
     parser = argparse.ArgumentParser()
     parser.add_argument("pathsIn", help="directory containing txt files of agents and paths taken", type=str)
-    parser.add_argument("bdIn", help="directory containing txt files with backward djikstra output", type=str) 
-    parser.add_argument("mapIn", help="directory containing txt files with obstacles", type=str) 
+    parser.add_argument("bdIn", help="directory containing txt files with backward djikstra output", type=str)
+    parser.add_argument("mapIn", help="directory containing txt files with obstacles", type=str)
     npzMsg = "output file with maps, bds as name->array dicts, along with (mapname, bdname, path) triplets for each EECBS run"
-    parser.add_argument("npzOut", help=npzMsg, type=str) 
+    parser.add_argument("npzOut", help=npzMsg, type=str)
 
     args = parser.parse_args()
     pathsIn = args.pathsIn
