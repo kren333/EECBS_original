@@ -8,9 +8,10 @@ import argparse
 import pdb
 import pandas as pd
 from os.path import exists
+import shutil
 
 mapsToNumAgents = {
-    "Paris_1_256": (10, 200), # Verified
+    "Paris_1_256": (10, 50), # Verified
     "random-32-32-20": (50, 409), # Verified
     "random-32-32-10": (50, 461), # Verified
     "den520d": (50, 1000), # Verified
@@ -41,6 +42,13 @@ class BatchRunner:
             command += " --suboptimality={}".format(self.suboptimality)
             command += " --batchFolder={} -o allresults.csv".format(self.batchFolderName) 
             subprocess.run(command.split(" "), check=False) # True if want failure error
+            # delete file if not max agents on the map setting
+            mapname = self.mapfile.split('.')[0].split("/")[-1]
+            print(mapname)
+            maxagents = mapsToNumAgents[mapname][1]
+            if numAgents != maxagents:
+                # DELETE THE FILE
+                os.remove("./raw_data/bd/"+ self.scenfile.split("/")[-1] + str(numAgents) + ".txt")
     
     def detectAllFailed(self, numAgents):
         """
@@ -97,9 +105,8 @@ def main():
     dateString = ""
     batchFolderName = "GridSubOptFast/GridSOFast{}_{}".format(dateString, curMap)
     
-    seeds = [1, 2, 3, 4, 5]
-    scens = [1, 2, 3, 4, 5] # TODO should we run all these scenes?
-
+    seeds = [1, 2, 3]
+    scens = [1, 2, 3] # TODO should we run all these scenes?
     for expName in myExps:
         print("Starting ExpSettings: {}".format(expName))
         exp = ExpSettings[expName]
@@ -109,6 +116,15 @@ def main():
             myBR = BatchRunner("{}/{}.map".format(mapfolder, curMap), "{}/{}-random-{}.scen".format(scenfolder, curMap, aScenNum),
                 exp["timeLimit"], exp["suboptimality"], batchFolderName)
             myBR.runBatchExps(rangeOfAgents, seeds)
+
+    # make a folder with all the current map info
+    os.mkdir("./raw_data/" + curMap)
+    shutil.move("./raw_data/bd/", "./raw_data/" + curMap)
+    shutil.move("./raw_data/paths/", "./raw_data/" + curMap)
+    
+    # replace old bd and paths folder
+    os.mkdir("./raw_data/bd")
+    os.mkdir("./raw_data/paths") 
 
 if __name__ == "__main__":
     main()

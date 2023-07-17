@@ -83,11 +83,11 @@ class PipelineDataset(Dataset):
         windowAgents = list(filter(lambda loc: abs(loc[1][0]-curloc[0]) <= self.k and abs(loc[1][1]-curloc[1]) <= self.k and loc[0] != agent, enumerate(paths[timestep])))
         # and create list of tuples of (euclidean distance from agent,agentnumber)
         windowAgents = list(map(lambda tup: (math.sqrt((tup[1][0]-curloc[0])**2 + (tup[1][1]-curloc[1])**2), tup[0]), windowAgents))
-        # get the x,y indices of all agents within k distance
         
         # get the 4 closest agents, if possible
         windowAgents.sort()
         windowAgents = windowAgents[:4]
+        # get the x,y indices of all agents within k distance
         windowAgentIdxs = [agent[1] for agent in windowAgents]
         windowAgentLocs = paths[timestep][windowAgentIdxs]
         print("WINDOW AGENTS: ", windowAgents)
@@ -110,7 +110,7 @@ class PipelineDataset(Dataset):
         '''
         def translate_to_bd(bd):
             bd = bd.split("-random-")
-            bd = bd[0] + "-random-" + bd[1][0] + "200"
+            bd = bd[0] + "-random-" + bd[1][0] + "50" # TODO fix: adapt to be max number agents
             return bd
         
         items = list(self.tn2.items())
@@ -422,9 +422,9 @@ def main():
     print(loader.bds.keys())
     print(len(loader))
     print("2nd TO LAST ITEM")
-    print(loader[24297059])
+    print(loader[524759])
     print("LAST ITEM")
-    print(loader[24297200])
+    print(loader[524760])
 
 
 if __name__ == "__main__":
