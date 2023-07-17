@@ -58,36 +58,17 @@ class PipelineDataset(Dataset):
         '''
         INPUT: index (must be smaller than len(self))
         OUTPUT: map, bd, and direction
-            map: (w,h) TODO: (2k+1, 2k+1)
-            bd: (w,h)
+            map: (2k+1, 2k+1)
+            bd: (2k+1, 2k+1)
+            other agent bds: (4,2k+1,2k+1)
             direction: (2)
-        TODO: centered version. when passing in the map and bd, return a (2k+1,2k+1) window centered at current location of agent. 
+        centered version. when passing in the map and bd, return a (2k+1,2k+1) window centered at current location of agent. 
         '''
         if idx >= self.__len__():
             print("Index too large for {}-sample dataset".format(self.__len__()))
             return
 
-        def translate_to_bd(bd):
-            bd = bd.split("-random-")
-            bd = bd[0] + "-random-" + bd[1][0] + "200"
-            return bd
-        
-        items = list(self.tn2.items())
-        tn2ind = 0
-        tracker = 0
-        while tracker + items[tn2ind][1][0] <= idx:
-            tracker += items[tn2ind][1][0] # add number of data in the (t,n,2) matrix
-            tn2ind += 1
-        # so now tn2ind holds the index to the (t,n,2) matrix containing the data we want
-        mapname, bdname, seed = items[tn2ind][0].split(",")
-        bdname = translate_to_bd(bdname)
-        bd = self.bds[bdname]
-        grid = self.maps[mapname]
-        # get the location, dir to next location
-        newidx = idx - tracker # index within the matrix to get
-        paths = items[tn2ind][1][1] # (t,n,2) paths matrix
-        t, n, _ = np.shape(paths)
-        timestep, agent = newidx // n, newidx % n
+        bd, grid, paths, timestep, agent, t = self.find_instance(idx)
         curloc = paths[timestep, agent]
         nextloc = paths[timestep+1, agent] if timestep < t-1 else curloc
         print(curloc)
@@ -115,6 +96,7 @@ class PipelineDataset(Dataset):
         dijk = bd[agent][curloc[0]-self.k:curloc[0]+self.k+1, curloc[1]-self.k:curloc[1]+self.k+1]
         print(len(dijk), len(dijk[0]))
         helper_bds = [bd[inwindow[1]][curloc[0]-self.k:curloc[0]+self.k+1, curloc[1]-self.k:curloc[1]+self.k+1] for inwindow in windowAgents] # for each of the (at most) 4 nearby agents, get their bds centered at the current agent's location
+        helper_bds = np.array(helper_bds)
 
         return grid, dijk, helper_bds, nextloc - curloc
     
@@ -122,8 +104,32 @@ class PipelineDataset(Dataset):
         '''
         returns the backward dijkstra, map, and path arrays, and indices to get into the path array
         '''
-        pass
-        # TODO implement; essentially lines 68-83 (85? 86?)
+        def translate_to_bd(bd):
+            bd = bd.split("-random-")
+            bd = bd[0] + "-random-" + bd[1][0] + "200"
+            return bd
+        
+        items = list(self.tn2.items())
+        tn2ind = 0
+        tracker = 0
+        while tracker + items[tn2ind][1][0] <= idx:
+            tracker += items[tn2ind][1][0] # add number of data in the (t,n,2) matrix
+            tn2ind += 1
+        # so now tn2ind holds the index to the (t,n,2) matrix containing the data we want
+        mapname, bdname, seed = items[tn2ind][0].split(",")
+        bdname = translate_to_bd(bdname)
+        bd = self.bds[bdname]
+        grid = self.maps[mapname]
+        # pad bds (for all agents), grid (for all agents) with empty 0 window(s), k in all directions
+        bd = np.pad(bd, self.k, mode="constant", constant_values=0)[self.k:-self.k]
+        grid = np.pad(grid, self.k, mode="constant", constant_values=0)[self.k:-self.k]
+        # get the location, dir to next location
+        newidx = idx - tracker # index within the matrix to get
+        paths = items[tn2ind][1][1] # (t,n,2) paths matrix
+        paths += self.k # adjust for padding
+        t, n, _ = np.shape(paths)
+        timestep, agent = newidx // n, newidx % n
+        return bd, grid, paths, timestep, agent, t
 
     def parse_npz(self, loaded):
         loaded = {k:v for k, v in loaded.items()}
@@ -408,13 +414,11 @@ def main():
     # np.savez_compressed(npzOut, **maps, **bds, **data1) # Note automatically stacks to numpy vectors
 
     # DEBUGGING: test out the dataloader
-    loader = PipelineDataset(npzOut + ".npz", 10)
+    loader = PipelineDataset(npzOut + ".npz", 200)
     print(loader.bds.keys())
-    # tn2s = {k:v for k, v in loader.tn2.items()}
-    # print(tn2s.keys())
     print(len(loader))
     print("2nd TO LAST ITEM")
-    print(loader[24297199])
+    print(loader[24297059])
     print("LAST ITEM")
     print(loader[24297200])
 
