@@ -12,12 +12,12 @@ import shutil
 
 mapsToNumAgents = {
     "Paris_1_256": (10, 50), # Verified
-    "random-32-32-20": (50, 409), # Verified
-    "random-32-32-10": (50, 461), # Verified
+    "random_32_32_20": (50, 409), # Verified
+    "random_32_32_10": (10,50), #(50, 461), # Verified
     "den520d": (50, 1000), # Verified
     "den312d": (10, 200), # Verified
-    "empty-32-32": (50, 511), # Verified
-    "empty-48-48": (50, 1000), # Verified
+    "empty_32_32": (50, 511), # Verified
+    "empty_48_48": (50, 1000), # Verified
     "ht_chantry": (50, 1000), # Verified
 }
 

@@ -12,6 +12,7 @@ import torchvision
 from torch.utils.data import Dataset
 from collections import defaultdict
 import pdb
+import random
 import math
 
 '''
@@ -28,7 +29,7 @@ import math
 class PipelineDataset(Dataset):
 
     # instantiate class variables
-    def __init__(self, numpy_data_path, k):
+    def __init__(self, numpy_data_path, k, size):
         '''
         INPUT:
             numpy_data_path: the path to the npz file storing all map, backward dijkstra, and path information across all EECBS runs. (string)
@@ -46,8 +47,9 @@ class PipelineDataset(Dataset):
 
         # read in the dataset, saving map, bd, and path info to class variables
         loaded = np.load(numpy_data_path)
-        self.parse_npz(loaded)
         self.k = k
+        self.parse_npz(loaded)
+
 
     # get number of instances in total (length of training data)
     def __len__(self):
@@ -71,7 +73,6 @@ class PipelineDataset(Dataset):
         bd, grid, paths, timestep, agent, t = self.find_instance(idx)
         curloc = paths[timestep, agent]
         nextloc = paths[timestep+1, agent] if timestep < t-1 else curloc
-        print(curloc)
 
         # TODO have ids of 4 closest agents within the window (will be passing in the bds of those 4 agents)
         # 1. get ids of 4 closest agents
@@ -90,23 +91,41 @@ class PipelineDataset(Dataset):
         # get the x,y indices of all agents within k distance
         windowAgentIdxs = [agent[1] for agent in windowAgents]
         windowAgentLocs = paths[timestep][windowAgentIdxs]
-        print("WINDOW AGENTS: ", windowAgents)
+        # print("WINDOW AGENTS: ", windowAgents)
 
         # return 2k+1 by 2k+1 grid centered at agent's current location for both the map, bd
-        print(len(bd))
         grid = grid[curloc[0]-self.k:curloc[0]+self.k+1, curloc[1]-self.k:curloc[1]+self.k+1]
-        print(len(grid), len(grid[0]))
-        print(np.shape(bd[agent]))
         dijk = bd[agent][curloc[0]-self.k:curloc[0]+self.k+1, curloc[1]-self.k:curloc[1]+self.k+1]
-        print(len(dijk), len(dijk[0]))
+        dijk = np.where(dijk == 1073741823, 0, dijk)
+
+        dijk = dijk - dijk[self.k,self.k]
         helper_bds = [bd[inwindow[1]][curloc[0]-self.k:curloc[0]+self.k+1, curloc[1]-self.k:curloc[1]+self.k+1] for inwindow in windowAgents] # for each of the (at most) 4 nearby agents, get their bds centered at the current agent's location
         helper_bds = np.array(helper_bds)
+        helper_bds = np.where(helper_bds == 1073741823, 0, helper_bds)
+        n = len(helper_bds)
+        if n < 4:
+            if n == 0:
+                windowAgentLocs = np.array([[curloc[0], curloc[1]]]*4)
+                helper_bds = np.zeros((4-n, self.k*2+1,self.k*2+1))
+            else:
+                windowAgentLocs = np.concatenate([windowAgentLocs, np.array([[curloc[0], curloc[1]]]*(4-n))])
+                helper_bds = np.concatenate([helper_bds, np.zeros((4-n, self.k*2+1,self.k*2+1))])
+        helper_bds = np.array([bd - bd[self.k,self.k] for bd in helper_bds])
 
-        #TODO one hot vectorness
+        label = nextloc - curloc
+        index = None
+        if label[0] == 0 and label[1] == 0: index = 0
+        elif label[0] == 0 and label[1] == 1: index = 1
+        elif label[0] == 1 and label[1] == 0: index = 2
+        elif label[0] == -1 and label[1] == 0: index = 3
+        else: index = 4
 
+        finallabel = np.zeros(5)
+        finallabel[index] = 1
 
-        #TODO fix padding helper_bds and windowagents and then make them numpy compatible
-        return grid, dijk, helper_bds, windowAgentLocs - curloc, nextloc - curloc
+        relativeAgentLocs = (windowAgentLocs - curloc).flatten()
+
+        return grid, dijk, helper_bds, relativeAgentLocs, finallabel
 
     def find_instance(self, idx):
         '''
@@ -129,11 +148,11 @@ class PipelineDataset(Dataset):
         bd = self.bds[bdname]
         grid = self.maps[mapname]
         # pad bds (for all agents), grid (for all agents) with empty 0 window(s), k in all directions
-        bd = np.pad(bd, self.k, mode="constant", constant_values=0)[self.k:-self.k]
-        grid = np.pad(grid, self.k, mode="constant", constant_values=0)[self.k:-self.k]
+        # bd = np.pad(bd, npads, mode="constant", constant_values=1073741823)
+        # grid = np.pad(grid, self.k, mode="constant", constant_values=1)
         # get the location, dir to next location
         newidx = idx - tracker # index within the matrix to get
-        paths = items[tn2ind][1][1] # (t,n,2) paths matrix
+        paths = items[tn2ind][1][1].copy() # (t,n,2) paths matrix
         paths += self.k # adjust for padding
         t, n, _ = np.shape(paths)
         timestep, agent = newidx // n, newidx % n
@@ -160,9 +179,14 @@ class PipelineDataset(Dataset):
         for k, v in self.tn2.items():
             t, n, _ = np.shape(v)
             self.tn2[k] = (t*n, v)
-        self.length = sum([value[0] for value in self.tn2.values()])
-        # self.twh = dict(items[k:]) # get all the paths in (t,w,h) form
-
+        self.length = min(200000, sum([value[0] for value in self.tn2.values()]))
+        # self.twh = dict(items[k:]) # get all the paths in (t,w,h) form\
+        npads = ((0,0),(self.k, self.k), (self.k, self.k))
+        for key in self.bds:
+            self.bds[key] = np.pad(self.bds[key], npads, mode="constant", constant_values=1073741823)
+            self.bds[key] = np.transpose(self.bds[key], (0, 2, 1)) # (n,h,w) -> (n,w,h) NOTE that originally all bds are parsed in transpose
+        for key in self.maps:
+            self.maps[key] = np.pad(self.maps[key], self.k, mode="constant", constant_values=1)
 
 
 def parse_map(mapfile):
@@ -265,7 +289,7 @@ def parse_path(pathfile):
             res2[time][width][height] = agent
 
     res = np.asarray(res)
-    print(t, w, h, n)
+    # print(t, w, h, n)
 
     # res2 = [[[1 if [width, height] in res[time] else 0 for width in range(w)] for height in range(h)] for time in range(t)]
     return res
@@ -274,7 +298,7 @@ def parse_bd(bdfile):
     '''
     parses a txt file of bd info for each agent
     input: bdfile (string)
-    output: (N,W,H)
+    output: (N,H,W) NOTE: this is a transposed bd compared to the map! (fixed in npz parsing logic in dataloader)
     '''
     timetobd = defaultdict(list)
     w, h = None, None
@@ -291,6 +315,7 @@ def parse_bd(bdfile):
                 continue
             line = line[:-2]
             heuristics = line.split(",")
+            heuristics = [int(x) for x in heuristics]
             timetobd[agent] = heuristics
             agent += 1
     for key in timetobd:
@@ -310,7 +335,7 @@ def parse_bd(bdfile):
     for i in range(len(timetobd)):
         res.append(timetobd[i])
     res = np.asarray(res)
-
+    # pdb.set_trace()
     return res
 
 def batch_map(dir):
@@ -363,9 +388,22 @@ def batch_path(dir):
         NOTE we assume that the file of each path is formatted as 'raw_data/paths/mapnameandbdname.txt'
         NOTE and also that bdname has agent number grandfathered into it
     '''
-    res1 = {} # dict of (mapname, bdname, int->np.darray dictionary), and is (n, t, 2)
-    res2 = {} # dict of (mapname, bdname, int->np.darray dictionary), and is (t, w, h)
+    res1 = {} # dict of (mapname, bdname, int->np.darray dictionary), and is (n, t, 2); train set only
+    # res2 = {} # dict of (mapname, bdname, int->np.darray dictionary), and is (t, w, h)
+    res2 = {} # dict of the same thing, but for val set
+    numFiles = 0
+    # get number of files
+    for filename in os.listdir(dir):
+        f = os.path.join(dir, filename)
+        if os.path.isfile(f):
+            numFiles += 1
+        else:
+            raise RuntimeError("bad path dir")
+    valFiles = random.sample(range(0, numFiles), numFiles // 5) # take 20% of data for val
+    print(valFiles, numFiles)
+
     # iterate over files in directory, making a tuple for each
+    idx = 0 # keep track of if we want to save to val set or train set
     for filename in os.listdir(dir):
         f = os.path.join(dir, filename)
         # checking if it is a file
@@ -380,12 +418,17 @@ def batch_path(dir):
             val = parse_path(f) # get the 2 types of paths: the first being a list of agent locations for each timestep, the 2nd being a map for each timestep with -1 if no agent, agent number otherwise
             # print(mapname, bdname, seed, np.count_nonzero(val2 != -1)) # debug statement
             print("___________________________\n")
-            res1[mapname + "," + bdname + "," + seed] = val
+            if idx in valFiles:
+                res2[mapname + "," + bdname + "," + seed] = val
+            else:
+                res1[mapname + "," + bdname + "," + seed] = val
             # res2[mapname + "," + bdname + "," + seed + ",twh"] = val2
             print(f)
+            idx += 1
         else:
             raise RuntimeError("bad path dir")
-    return res1
+    # pdb.set_trace()
+    return res1, res2
 
 def main():
     # cmdline argument parsing: take in dirs for paths, maps, and bds, and where you want the outputted npz
@@ -394,41 +437,59 @@ def main():
     parser.add_argument("bdIn", help="directory containing txt files with backward djikstra output", type=str)
     parser.add_argument("mapIn", help="directory containing txt files with obstacles", type=str)
     npzMsg = "output file with maps, bds as name->array dicts, along with (mapname, bdname, path) triplets for each EECBS run"
-    parser.add_argument("npzOut", help=npzMsg, type=str)
+    parser.add_argument("trainOut", help=npzMsg, type=str)
+    parser.add_argument("valOut", help=npzMsg, type=str)
+
 
     args = parser.parse_args()
     pathsIn = args.pathsIn
     bdIn = args.bdIn
     mapIn = args.mapIn
-    npzOut = args.npzOut
+    trainOut = args.trainOut
+    valOut = args.valOut
 
     # instantiate global variables that will keep track of each map and bd that you've encountered
     maps = {} # maps mapname->np array containing the obstacles in map
     bds = {} # maps bdname->np array containing bd for each agent in the instance (NOTE: keep track of number agents in bdname)
     data = [] # contains all run instances, in the form of (map name, bd name)
 
-    # TODO parse each map, add to global dict
-    # maps = batch_map(mapIn)
+    # parse each map, add to global dict
+    maps = batch_map(mapIn)
     # print(maps)
 
-    # # # TODO parse each bd, add to global dict
-    # bds = batch_bd(bdIn)
+    # parse each bd, add to global dict
+    bds = batch_bd(bdIn)
     # print(bds)
 
-    # TODO parse each path, add to global list of data
-    # data1 = batch_path(pathsIn)
+    # parse each pah, add to global list
+    data1train, data1val = batch_path(pathsIn)
+    # pdb.set_trace()
 
     # send each map, each bd, and each tuple representing a path + instance to npz
-    # np.savez_compressed(npzOut, **maps, **bds, **data1) # Note automatically stacks to numpy vectors
+    np.savez_compressed(trainOut, **maps, **bds, **data1train) # Note automatically stacks to numpy vectors
+    np.savez_compressed(valOut, **maps, **bds, **data1val) # Note automatically stacks to numpy vectors
 
     # DEBUGGING: test out the dataloader
-    loader = PipelineDataset(npzOut + ".npz", 200)
-    print(loader.bds.keys())
-    print(len(loader))
-    print("2nd TO LAST ITEM")
-    print(loader[524759])
-    print("LAST ITEM")
-    print(loader[524760])
+    loader = PipelineDataset(trainOut + ".npz", 4, 5)
+    print(len(loader), " train size")
+    for i in range(len(loader)):
+        grid, dijk, helper_bds, relativeAgentLocs, finallabel = loader[i]
+        assert(grid.shape == (9,9))
+        assert(dijk.shape == (9,9))
+        assert(helper_bds.shape == (4,9,9))
+        assert(relativeAgentLocs.shape == (8,))
+        assert(finallabel.shape == (5,))
+
+    loader = PipelineDataset(valOut + ".npz", 4, 5)
+    print(len(loader), " val size")
+    for i in range(len(loader)):
+        loader[i]
+        grid, dijk, helper_bds, relativeAgentLocs, finallabel = loader[i]
+        assert(grid.shape == (9,9))
+        assert(dijk.shape == (9,9))
+        assert(helper_bds.shape == (4,9,9))
+        assert(relativeAgentLocs.shape == (8,))
+        assert(finallabel.shape == (5,))
 
 
 if __name__ == "__main__":
